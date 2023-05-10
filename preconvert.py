@@ -1,3 +1,5 @@
+"""Pre-convert MIDI file."""
+
 import os
 import tkinter as tk
 from tkinter import filedialog
@@ -8,18 +10,28 @@ from mido import MidiFile, MetaMessage, Message
 root = tk.Tk()
 root.withdraw()
 
-def convertInstrument(old: int, template: str) -> int:
+LOG_FILE = "conversion.log"
+
+def convertInstrument(old: int, template: str, msg: Message) -> int:
     """Convert instrument from old index to new index, referencing the provided template."""
     with open(template, "r") as json_f:
         contents = json_f.read()
         json_contents = json.loads(contents)
+        
         if str(old) in json_contents:
             if json_contents[str(old)]["new_instrument"] >= 0:
+                with open(LOG_FILE, "a") as fh:
+                    fh.write(f"Channel {msg.channel}: {old} -> {json_contents[str(old)]['new_instrument']}\n")
                 return json_contents[str(old)]["new_instrument"]
+        with open(LOG_FILE, "a") as fh:
+            fh.write(f"Channel {msg.channel}: {old} (Not Converted)\n")
         return old
 
 def convertSong(old: str, new: str, template: str):
     """Converts song instruments from one index to another based on the conversion template provided."""
+    with open(LOG_FILE, "w") as fh:
+        fh.write(f"- Old MIDI: {old}\n")
+        fh.write(f"- New MIDI: {new}\n")
     cv1 = MidiFile(old, clip=True)
 
     for track in cv1.tracks:
@@ -27,7 +39,7 @@ def convertSong(old: str, new: str, template: str):
             if isinstance(msg, Message):
                 if msg.type == "program_change":
                     old_type = msg.program
-                    msg.program = convertInstrument(old_type + 1, template) - 1
+                    msg.program = convertInstrument(old_type + 1, template, msg) - 1
 
     cv1.save(new)
 
@@ -58,5 +70,5 @@ while not accepted:
     if not accepted:
         selected_model = None
 template = f"data/{models[selected_model]}.json"
-convertSong(old_midi, new_midi, "data/bk.json")
+convertSong(old_midi, new_midi, template)
 print(f"Written to {new_midi}")
